@@ -1,0 +1,166 @@
+﻿@page "/snake"
+@rendermode InteractiveServer
+@using Blazor.Extensions
+@using Blazor.Extensions.Canvas
+@using Blazor.Extensions.Canvas.Canvas2D
+@using System.Numerics
+@using System.Diagnostics
+@using System.Text.Json
+@using GUI.Client.Controllers
+@using GUI.Client.Models
+@inject IJSRuntime JsRuntime;
+
+<PageTitle> Snake </PageTitle>
+
+<div class="input-row">
+    @if (controller.IsConnected())
+    {
+        <button class="btn btn-primary" @onclick="Disconnect">Disconnect</button>
+    }
+    else
+    {
+        <label for="url"> Server Address: </label>
+        <input id="url" type="text" @bind="serverInput" />
+        <label for="url"> Port: </label>
+        <input id="port" type="number" @bind="serverPort" class="port" />
+        <label for="url"> PlayerName: </label>
+        <input id="url" type="text" @bind="playerName" />
+        <button class="btn btn-primary" @onclick="ConnectToServer">Connect</button>
+    }
+</div>
+@if (connectionFailed)
+{
+    <h2 style="color:red;" > @connectionFailedReason </h2 >
+    
+}
+
+<div id="snakeCanvas" style="position: fixed; width: 100%; height: 100%">
+
+    <BECanvas Width="@ViewWidth" Height="@ViewHeight" @ref="canvasReference"></BECanvas>
+
+</div>
+<img @ref="backgroundImage" id="bgImage" src="images/Background.png" alt="image" style="display:none;" />
+@code
+{
+    private bool connectionFailed = false;
+    private string connectionFailedReason = "";
+    private NetworkController controller = new();
+    protected int ViewWidth = 1000;
+    protected int ViewHeight = 1000;
+    private BECanvasComponent canvasReference = null!;
+    private Canvas2DContext context = null!;
+    private IJSObjectReference jsModule = null!;
+    private string serverInput = "";
+    private string serverPort = "";
+    private string playerName = "";
+    private ElementReference backgroundImage;
+
+    private void ConnectToServer()
+    {
+        try
+        {
+            controller.TryConnect(serverInput, serverPort, playerName);
+            connectionFailed = false;
+        }
+        catch(Exception e)
+        {
+            connectionFailed = true;
+            connectionFailedReason = e.Message;
+        }
+        StateHasChanged();
+    }
+
+    private void Disconnect()
+    {
+        controller.Disconnect();
+        StateHasChanged();
+    }
+    // need to find where to envoke this every 20milliseconds
+    protected override async Task OnAfterRenderAsync( bool firstRender )
+    {
+        if ( firstRender )
+        {
+            jsModule = await JsRuntime.InvokeAsync<IJSObjectReference>( "import", "./Pages/SnakeGUI.razor.js" );
+            context = await canvasReference.CreateCanvas2DAsync();
+            await JsRuntime.InvokeAsync<object>( "initRenderJS", DotNetObjectReference.Create( this ) );           
+
+            // TODO: Start the game loop
+
+            // in the meantime, draw something to initialize the canvas
+            // you may want to remove this after you are drawing something
+            await context.SetFillStyleAsync( "lightblue" );
+            await context.FillRectAsync( 0, 0, 1000, 1000 );
+            RenderLoop();
+        }
+
+
+    }
+    /// <summary>
+    /// Renders the view once every 20 milliseconds (50 frames/second)
+    /// </summary>
+    private async void RenderLoop()
+    {
+        while (true)
+        {
+            Thread.Sleep(20);
+            await DrawFrame();
+        }
+    }
+    /// <summary>
+    /// Draws one frame of the game
+    /// </summary>
+    /// <returns></returns>
+    private async Task DrawFrame()
+    {
+        await context.BeginBatchAsync();
+
+        // clip the view so that objects drawn outside the canvas will not be shown
+        await context.BeginPathAsync();
+        await context.RectAsync(0, 0, ViewWidth, ViewHeight);
+        await context.ClipAsync();
+
+        // Because we are modifying the transformation matrix, we need to save it so we can restore it at the end
+        await context.SaveAsync();
+
+        await context.SetFillStyleAsync("lightblue");
+        await context.FillRectAsync(0, 0, ViewWidth, ViewHeight);
+        // Center on origin, move to center of view port
+        await context.TranslateAsync(ViewWidth / 2, ViewHeight / 2);
+        await context.TranslateAsync(-controller.PlayerX(), -controller.PlayerY());
+
+        // Draw the background:
+        
+        int wsize = controller.WorldSize();
+        await context.DrawImageAsync(backgroundImage, -wsize/2, -wsize/2, wsize, wsize);
+        //await context.BeginBatchAsync();
+        await controller.DrawAsync(context);
+        //await context.SetFillStyleAsync("lightblue");
+        //await context.RectAsync( 100, 100, ViewWidth, ViewHeight);
+        // await context.BeginPathAsync();
+        // await context.SetFillStyleAsync($"rgb( 80, 255, 150 )");
+        // await context.FillRectAsync(50, 50, 100, 100);
+        // await context.StrokeAsync();
+        //await context.EndBatchAsync();
+        await context.RestoreAsync();
+        await context.EndBatchAsync();
+        StateHasChanged();
+    }
+
+
+    [JSInvokable]
+    public void HandleKeyPress( string key )
+    {
+        // TODO: Once the client is connected and the handshake is complete,
+        //       invoke some controller method to send the appropriate command to the server
+        if( key == "w")
+            controller.KeyPressed("up");
+        if (key == "a")
+            controller.KeyPressed("left");
+        if (key == "d")
+            controller.KeyPressed("right");
+        if (key == "s")
+            controller.KeyPressed("down");
+    }
+
+}
+

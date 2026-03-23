@@ -1,0 +1,35 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<h1>About</h1>
+
+<p>
+The design is Strongly MVC The model and view where entirely written before a single line of code for the the view was written. 
+The one interesting decision is the desision to put the draw code of the actual objects into the model. This was decided
+since this is how game engines work and bascially makes it so you would be able to add new objects into the game and
+you wouldn't have to change anything in both the controller and view. So the controller doesn't even know what
+    objects it's adding to the world.
+</p>
+<p>
+    All of the game objects are on an interface drawable so you can call draw on it. When the world draws it adds them all to
+    a list and then just calls draw on all regardless of class. The model has a draw call and basically just passes the draw down to the world.
+</p>
+
+<p>
+    The decision to hold the draw functionality in the Models benefits the separation of concerns within the Controller classes.
+    There is minimal interaction between the Controller and the View, which made handling each of them much easier by connecting them through
+    the Models. The Network controller simply receives key inputs through the View and sends the command, and concurrently holds open another thread
+    to receive data from the server and update the Model statuses. As a result of this design, the View can pass the draw method right through the Controller
+    without having the Controller handle it.
+</p>
+<p>
+    Because of the aforementioned design decisions, the Model classes are less empty than they would be otherwise, which balances the code concentration out
+    amongst the architecture.
+</p>
+<p>
+    For the High Score Database, it is important to note that for our implementation, if a user force closes the program before pressing
+    the "disconnect" button, the associated rows for that game and its players will have the ending times set to null; This is purposeful,
+    allowing for admin of the database to detect and log potential issues such as crashes and other errors.
+</p>
+
